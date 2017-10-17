@@ -23,3 +23,6 @@ lines.markeredgewidth   :   1
 legend.numpoints        :   1
 legend.frameon          :   False
 legend.handletextpad    :   0.3
+
+
+axes.prop_cycle         : cycler(color=['4e79a7', 'f28e2b', 'e15759', '76b7b2', '59a14f', 'edc948', 'b07aa1', 'ff9da7', '9c755f', 'bab0ac'])
