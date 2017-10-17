@@ -12,3 +12,9 @@ new results become available.
 
 Data and IDL plotting: Nils Odegard (GSFC, LAMBDA)
 Python plotting: Duncan Watts (JHU)
+
+
+
+Duncan Watts created a plot with an ell^0.2 scaling, including all data and theory.
+
+![alt text](https://github.com/class-telescope/cmbpol_plotting/blob/master/cmb_data_plot.png  "test text")
