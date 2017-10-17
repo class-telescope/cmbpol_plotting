@@ -1,3 +1,4 @@
+font.family             : serif
 text.usetex         : True
 text.latex.unicode : True 
 text.latex.preamble :  \usepackage{txfonts}, \usepackage[T1]{fontenc}

@@ -5,6 +5,24 @@ import pandas
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset, inset_axes
 
+power = 0.2
+def bincl(ell, cl, clerr, nbins=10):
+    clerr = np.mean(clerr, axis=0)
+    if len(ell) > nbins:
+        ells = np.array_split(ell, nbins)
+        cls = np.array_split(cl, nbins)
+        sigmas = np.array_split(clerr, nbins)
+        ellb = np.array([l.mean() for l in ells])
+        clb = np.array([sum(cl/sig**2)/sum(1/sig**2) for cl, sig in zip(cls, sigmas)])
+        errb = np.array([1/sum(1/sig**2) for sig in sigmas])**0.5
+        ellwidth = np.array([l[-1] - l[0] for l in ells])/2*0
+    else:
+        ellb = ell
+        clb = cl
+        errb = clerr
+        ellwidth = np.zeros_like(ell)
+    return ellwidth, ellb, clb, errb
+
 class Plotting(object):
 
     def __init__(self, title=None, degreescale=False, inset=False):
@@ -48,7 +66,7 @@ class Plotting(object):
                 labelleft='off')
 
         self.xlabel(r'$\ell$', string2=r'Angle ($^\circ$)')
-        self.ylabel(r'$\ell (\ell+1) C_\ell / 2\pi$ ($\mu$K$^2$)')
+        self.ylabel(r'$\ell (\ell+1) C_\ell / 2\pi$ ($\mathrm{\mu K^2}$)')
          
         self.xlim([2, 1500])
 
@@ -57,20 +75,73 @@ class Plotting(object):
     def load_theory(self):
        
         self.theory = {}
-        theory_lensCl = np.loadtxt('B2_3yr_camb_planck_lensed_uK_20140314.txt')
-        theory_inf = np.loadtxt('B2_3yr_camb_planck_withB_uK_20140314.txt')
         tmp = np.loadtxt('base_plikHM_TT_lowTEB.minimum.theory_cl')
 
-        self.theory['TT'] = np.array([theory_inf[:, 0], theory_inf[:, 1]])
-        self.theory['EE'] = np.array([theory_inf[:, 0], theory_inf[:, 3]])
-        self.theory['TE'] = np.array([theory_inf[:, 0], theory_inf[:, 2]])
 
-        self.theory['BB-inf'] = np.array([theory_inf[:, 0], theory_inf[:, 4]])
-        self.theory['BB-lens'] = np.array([theory_lensCl[:, 0], theory_lensCl[:, 4]])
+        '''
+        theory_lensCl = np.loadtxt('B2_3yr_camb_planck_lensed_uK_20140314.txt')
+        theory_inf = np.loadtxt('B2_3yr_camb_planck_withB_uK_20140314.txt')
+        self.theory['TT'] = np.array([theory_inf[:,0], theory_inf[:, 1]])
+        self.theory['EE'] = np.array([theory_inf[:,0], theory_inf[:, 3]])
+        self.theory['TE'] = np.array([theory_inf[:,0], theory_inf[:, 2]])
+
+        self.theory['BB-inf'] = np.array([theory_inf[:,0], theory_inf[:, 4]])
+        self.theory['BB-lens'] = np.array([theory_lensCl[:,0], theory_lensCl[:, 4]])
+
+        '''
+        import camb
+        lmax = 4000
+        pars = camb.CAMBparams()
+
+        pars.InitPower.set_params(ns=0.9619, As=2.12e-9, r=0.00)
+        pars.set_cosmology(H0=66.93, ombh2=0.02218, omch2=0.1205, mnu=0.06, omk=0,
+                tau=0.0596)
+        pars.set_for_lmax(lmax, lens_potential_accuracy=1)
+        results = camb.get_results(pars)
+        results.Params.Max_l = lmax
+        powers = results.get_cmb_power_spectra(pars)
+        T0 = pars.TCMB*1e6
+        theory_lensCl = powers['total']*T0**2
+        theory_lensCl = theory_lensCl[:4001]
+        ell = np.arange(len(theory_lensCl[:,0]))
+
+        pars.InitPower.set_params(ns=0.9616, As=2.12e-9, r=0.07)
+        pars.set_for_lmax(lmax, lens_potential_accuracy=0)
+        pars.AccurateReionization = 1
+        pars.AccurateBB = 1
+        pars.NonLinear = 2
+        pars.WantTensors = True
+        pars.DoLensing = 0
+        pars.max_l_tensor = 8000
+        pars.max_eta_k_tensor = 16000
+        results = camb.get_results(pars)
+        pars.set_for_lmax(lmax, max_eta_k=100000, lens_potential_accuracy=1)
+
+
+        
+        pars.set_cosmology(H0=66.93, ombh2=0.02218, omch2=0.1205, mnu=0.06, omk=0,
+                tau=0.0596)
+        pars.set_for_lmax(lmax, lens_potential_accuracy=1)
+        results = camb.get_results(pars)
+        results.Params.Max_l = lmax
+        powers = results.get_cmb_power_spectra(pars)
+        T0 = pars.TCMB*1e6
+        theory_inf = powers['total']*T0**2
+
+        self.theory['TT'] = np.array([ell, theory_inf[:, 0]])
+        self.theory['EE'] = np.array([ell, theory_inf[:, 1]])
+        self.theory['TE'] = np.array([ell, theory_inf[:, 3]])
+
+        self.theory['BB-inf'] = np.array([ell, theory_inf[:, 2]])
+        self.theory['BB-lens'] = np.array([ell, theory_lensCl[:, 2]])
+
+
+
 
         self.theory['lensing'] = np.array([tmp[:, 0], tmp[:, 5]*1e7])
 
-    def plot_measurement(self, experiment, cltype, color='b', bins=None, label=None, doub=False):
+    def plot_measurement(self, experiment, cltype, color='b', bins=None, 
+            label=None, doub=False, symbol='o', nbins=10):
         '''Plot the power spectrum measurements for a given
         experiment'''
 
@@ -108,18 +179,95 @@ class Plotting(object):
             i_ub = i_bin & False
 
         #Plot errorbars
+        ms = 7
+        alpha = 0.8
         if np.any(i_bin):
-            self.ax.errorbar(ell_center[i_bin], binval[i_bin], xerr=xerr[:, i_bin], yerr=sigmas[:, i_bin], color=color, fmt='o', label=label)
+            #self.ax.errorbar(ell_center[i_bin], binval[i_bin], xerr=xerr[:,
+            #    i_bin], yerr=sigmas[:, i_bin], color=color, fmt='o',
+            #    label=label, ms=ms, alpha=alpha)
+            #self.ax.errorbar(ell_center[i_bin], -binval[i_bin], xerr=xerr[:,
+            #    i_bin], yerr=sigmas[:, i_bin], markeredgecolor=color, fmt='o',
+            #    markerfacecolor='none', label=label, ms=ms, alpha=alpha)
+            xerr, ellb, clb, errb = bincl(ell_center[i_bin], binval[i_bin], 
+                                                sigmas[:,i_bin], nbins=nbins)
+            inds = np.where(ellb > 45)
+            self.ax.errorbar(ellb[inds]**power, clb[inds], xerr=xerr[inds],
+                    yerr=errb[inds], fmt=symbol,
+                    ms=ms,
+                color=color, alpha=alpha)
+            self.ax.errorbar(ellb[inds]**power, -clb[inds], xerr=xerr[inds],
+                    yerr=errb[inds], fmt=symbol, markerfacecolor='none', 
+                    ms=ms, markeredgecolor=color, markeredgewidth=1,
+                    ecolor=color, alpha=alpha)
+            inds = np.where(ellb <= 45)
+            if len(inds) > 0:
+                #print(ell_center[i_bin][inds], binval[i_bin][inds],
+                #        sigmas[:,i_bin])
+                #print(inds, ellb, sigmas, sigmas[:,inds[0]].shape)
+                if cltype=='TT':
+                    nbins = 1000
+                else:
+                    nbins = 4
+                xerr, ellb, clb, errb = bincl(ell_center[i_bin][inds],
+                        binval[i_bin][inds], sigmas[:,i_bin][:,inds[0]],
+                        nbins=nbins)
+                self.ax.errorbar(ellb**power, clb, xerr=xerr,
+                        yerr=errb, fmt=symbol,
+                        ms=ms, color=color, alpha=alpha)
+                self.ax.errorbar(ellb**power, -clb, xerr=xerr,
+                        yerr=errb, fmt=symbol, markerfacecolor='none', 
+                        ms=ms, markeredgecolor=color, markeredgewidth=1,
+                        ecolor=color, alpha=alpha)
             label=None
             if self.inset:
-                self.axins.errorbar(ell_center[i_bin], binval[i_bin], xerr=xerr[:, i_bin], yerr=sigmas[:, i_bin], color=color, fmt='o', label=label)
+                self.axins.errorbar(ell_center[i_bin], binval[i_bin],
+                        xerr=[xerr[:, i_bin]], yerr=sigmas[:,
+                            i_bin], color=color,
+                        fmt=symbol, label=label, ms=ms, alpha=alpha)
+                self.axins.errorbar(ell_center[i_bin], -binval[i_bin],
+                        xerr=xerr[:, i_bin], yerr=sigmas[:,
+                            i_bin],
+                        markeredgecolor=color, markerfacecolor='none',
+                        fmt=symbol,
+                        label=label, ms=ms, alpha=alpha)
+            '''
+            for j in range(len(ell_center[i_bin])):
+                alpha = binval[i_bin][j]/max(sigmas[:, i_bin][:,j])
+                alpha = abs(alpha)/6
+                if alpha > 1:
+                    alpha = 1
+                #alpha = alpha**2
+                self.ax.errorbar(ell_center[i_bin][j], binval[i_bin][j], xerr=[xerr[:,
+                    i_bin][:,j]], yerr=[sigmas[:, i_bin][:,j]], color=color, fmt='o',
+                    label=label, ms=ms, alpha=alpha)
+                self.ax.errorbar(ell_center[i_bin][j], -binval[i_bin][j], xerr=[xerr[:,
+                    i_bin][:,j]], yerr=[sigmas[:, i_bin][:,j]], markeredgecolor=color, fmt='o',
+                    markerfacecolor='none', label=label, ms=ms, alpha=alpha)
+                label=None
+                if self.inset:
+                    self.axins.errorbar(ell_center[i_bin][j], binval[i_bin][j],
+                            xerr=[xerr[:, i_bin][:,j]], yerr=[sigmas[:,
+                                i_bin][:,j]], color=color,
+                            fmt='o', label=label, ms=ms, alpha=alpha)
+                    self.axins.errorbar(ell_center[i_bin][j], -binval[i_bin][j],
+                            xerr=[xerr[:, i_bin][:,j]], yerr=[sigmas[:,
+                                i_bin][:,j]],
+                            markeredgecolor=color, markerfacecolor='none', fmt='o',
+                            label=label, ms=ms, alpha=alpha)
+            '''
+
 
         if np.any(i_ub):
             self.ax.errorbar(ell_center[i_ub], upper_bound[i_ub], xerr=xerr[:, i_ub], yerr=sigmas[:, i_ub], color=color, fmt='o', label=label,
-                             uplims=True)
+                             uplims=True, ms=ms)
+            self.ax.errorbar(ell_center[i_ub], -upper_bound[i_ub], xerr=xerr[:,
+                i_ub], yerr=sigmas[:, i_ub], fmt='o', label=label,
+                markerfacecolor='none', markeredgecolor=color, uplims=True,
+                ms=ms)
+
 
         
-        self.ax.legend(loc=0, prop={'size': 12})
+        #self.ax.legend(loc=0, prop={'size': 12})
 
     def list_experiments(self, cltype):
         '''Returns a list of the different experiments for which we
@@ -130,6 +278,8 @@ class Plotting(object):
         print(experiments)
 
     def plot_theory(self, cltype, color, r=0.01, log=False, llp1=None):
+
+        lw = 1
 
         if cltype != 'BB':
             ell = self.theory[cltype][0]
@@ -153,6 +303,8 @@ class Plotting(object):
             fact = 1
         else:
             fact = ell*(ell+1) / 2*np.pi
+        
+        linestyle = '-'
 
         if 'BB' not in cltype:
             cl_theory = self.theory[cltype][1] / fact
@@ -161,20 +313,34 @@ class Plotting(object):
             cl_lens = self.theory['BB-lens'][1][:nell]
             cl_theory = cl_inf + cl_lens
             cl_theory /= fact
+            linestyle = ':'
         elif cltype == 'BB-inf':
             cl_theory = r/0.1*self.theory[cltype][1] / fact
         elif cltype == 'BB-lens':
             cl_theory = self.theory[cltype][1] / fact
+            linestyle = '--'
         else:
             raise ValueError('cltype is not valid')
 
+        if cltype == 'TE':
+            der = (np.diff(cl_theory)/np.diff(ell))[1:]/cl_theory[2:]
+            ignore = np.where(der > 0.3)
+            cl_theory[ignore] = np.nan
+
         if log:
-            self.ax.loglog(ell, cl_theory, color)
+            self.ax.loglog(ell[2:]**power, cl_theory[2:], color, linestyle=linestyle,
+                    lw=lw)
+            self.ax.loglog(ell[2:]**power, -cl_theory[2:], color, linestyle='-.', lw=lw)
         else:
-            self.ax.plot(ell, cl_theory, color)
+            self.ax.plot(ell[2:]**power, cl_theory[2:], color, linestyle=linestyle,
+                    lw=lw)
+            self.ax.plot(ell[2:]**power, -cl_theory[2:], color, linestyle='-.', lw=lw)
+
 
         if self.inset:
-            self.axins.semilogx(ell, cl_theory, color)
+            self.axins.semilogx(ell[2:], cl_theory[2:], color)
+
+        print(cltype, (cl_theory[2]*2*np.pi/(2*3))**0.5)
 
     def xlabel(self, string, string2=None):
         '''Sets the xlabel of the plot'''
@@ -209,14 +375,14 @@ class Plotting(object):
     def default_BB_plot(self):
         '''Generate a default BB plot with most of the current measurements plotted'''
 
-        self.plot_theory('BB', 'k', r=0.1)
-        self.plot_theory('BB-lens', 'k')
-        self.plot_theory('BB-inf', 'k', r=0.1)
+        self.plot_theory('BB', 'C3', r=0.07)
+        self.plot_theory('BB-lens', 'C3')
+        self.plot_theory('BB-inf', 'C3', r=0.07)
 
-        self.plot_measurement('BICEP2+Keck', 'BB', color='b')
-        self.plot_measurement('BICEP2+Keck/Planck', 'BB', color='c')
-        self.plot_measurement('POLARBEAR', 'BB', color='g')
-        self.plot_measurement('SPTpol', 'BB', color='r')
+        self.plot_measurement('BICEP2+Keck', 'BB', color='C3', symbol='p')
+        #self.plot_measurement('BICEP2+Keck/Planck', 'BB', color='C5')
+        self.plot_measurement('POLARBEAR', 'BB', color='C3', symbol='s')
+        self.plot_measurement('SPTpol', 'BB', color='C3', symbol='>')
         self.set_axes(xscale='log', yscale='log')
         self.xlim([2, 5000])
         self.ylim([1e-3, 0.6])
@@ -224,23 +390,33 @@ class Plotting(object):
     def default_TT_plot(self):
         '''Generate a default TT plot'''
 
-        self.plot_theory('TT', 'k')
-        self.plot_measurement('Planck_Plik_lite', 'TT', color='b', label='Planck')
-        self.plot_measurement('ACTPol', 'TT', color='g')
-        self.plot_measurement('SPT', 'TT', color='r')
+        self.plot_measurement('Planck_Plik_lite', 'TT', color='C0',
+                label='Planck', symbol='^', nbins=1000)
+        self.plot_measurement('Planck_COM_PowerSp', 'TT', color='C0',
+                label='Planck', symbol='^', nbins=20)
+        self.plot_measurement('WMAP_2013', 'TT', color='C0', label='WMAP 2013',
+                symbol='v', nbins=1000)
+        self.plot_measurement('ACTPol', 'TT', color='C0', symbol='<')
+        self.plot_measurement('SPT', 'TT', color='C0', symbol='>')
+        #self.plot_measurement('SPTPol', 'TT', color='C9')
         self.set_axes(xscale='log', yscale='log')
+        self.plot_theory('TT', 'C0')
         self.xlim([2, 5000])
         self.ylim([0.05, 10000])
 
     def default_TE_plot(self):
         '''Generate a default TE plot'''
 
-        self.plot_theory('TE', 'k')
-        self.plot_measurement('ACTPol_2016', 'TE', color='g', label='ACTPol 2016')
-        self.plot_measurement('BICEP2/Keck_2015', 'TE', color='c', label='BICEP2/Keck 2015')
-        self.plot_measurement('Planck_2015', 'TE', color='b', label='Planck 2015')
-        self.plot_measurement('SPTpol_2015', 'TE', color='r', label='SPTPol 2015')
-        self.plot_measurement('WMAP_2013', 'TE', color='m', label='WMAP 2013')
+        self.plot_theory('TE', 'C1')
+        #self.plot_measurement('WMAP_unbinned', 'TE', color='C9', label='WMAP 2013')
+        self.plot_measurement('Planck_2015', 'TE', color='C1', 
+            label='Planck 2015', symbol='^', nbins=15)
+        self.plot_measurement('ACTPol_2016', 'TE', color='C1', label='ACTPol 2016', symbol='<')
+        self.plot_measurement('WMAP_2013', 'TE', color='C1', label='WMAP 2013',
+            symbol='v', nbins=15)
+        self.plot_measurement('BICEP2/Keck_2015', 'TE', color='C1',
+            label='BICEP2/Keck 2015', symbol='p')
+        self.plot_measurement('SPTpol_2015', 'TE', color='C1', label='SPTPol 2015', symbol='>')
         self.set_axes(xscale='log', yscale='linear')
         self.xlim([2, 5000])
         self.ylim([-200, 200])
@@ -248,12 +424,15 @@ class Plotting(object):
     def default_EE_plot(self):
         '''Generate a default EE plot'''
 
-        self.plot_theory('EE', 'k')
-        self.plot_measurement('ACTPol_2016', 'EE', color='g', label='ACTPol 2016')
-        self.plot_measurement('BICEP2/Keck_2015', 'EE', color='c', label='BICEP2/Keck 2015')
-        self.plot_measurement('Planck_2015', 'EE', color='b', label='Planck 2015')
-        self.plot_measurement('SPTpol_2015', 'EE', color='r', label='SPTPol 2016')
-        self.plot_measurement('WMAP_2013', 'EE', color='m', label='WMAP 2013')
+        self.plot_theory('EE', 'C2')
+        self.plot_measurement('Planck_2015', 'EE', color='C2', 
+                label='Planck 2015', symbol='^', nbins=15)#, nbins=10)
+        self.plot_measurement('WMAP_2013', 'EE', color='C2', label='WMAP 2013',
+            symbol='v', nbins=15)
+        self.plot_measurement('ACTPol_2016', 'EE', color='C2', label='ACTPok 2016', symbol='<')
+        self.plot_measurement('BICEP2/Keck_2015', 'EE', color='C2',
+            label='BICEP2/Keck 2015', symbol='p')
+        self.plot_measurement('SPTpol_2015', 'EE', color='C2', label='SPTPk 2016', symbol='>')
         self.set_axes(xscale='log', yscale='log')
         self.xlim([2, 5000])
         self.ylim([-5, 50])
@@ -262,9 +441,9 @@ class Plotting(object):
         '''Generate a default dd plot'''
 
         self.plot_theory('lensing', 'k')
-        self.plot_measurement('POLARBEAR_2014', 'lensing', color='g', label='POLARBEAR 2014')
-        self.plot_measurement('ACTPol_2016', 'lensing', color='c', label='ACTPol 2016')
-        self.plot_measurement('SPTpol_2015', 'lensing', color='r', label='SPTPol 2015')
+        self.plot_measurement('POLARBEAR_2014', 'lensing', color='C4', label='POLARBEAR 2014')
+        self.plot_measurement('ACTPol_2016', 'lensing', color='C2', label='ACTPol 2016')
+        self.plot_measurement('SPTpol_2015', 'lensing', color='C3', label='SPTPol 2015')
         self.set_axes(xscale='log', yscale='log')
         self.xlim([2, 5000])
         self.ylabel(r'$10^7 \ell (\ell+1) C_\ell / 2\pi$ ($\mu$K$^2$)')
