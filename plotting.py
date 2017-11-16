@@ -66,7 +66,7 @@ class Plotting(object):
                 labelleft='off')
 
         self.xlabel(r'$\ell$', string2=r'Angle ($^\circ$)')
-        self.ylabel(r'$\ell (\ell+1) C_\ell / 2\pi$ ($\mathrm{\mu K^2}$)')
+        self.ylabel(r'$\sqrt{\frac{\ell (\ell+1)}{2\pi}C_\ell}$ ($\mathrm{\mu K}$)')
          
         self.xlim([2, 1500])
 
@@ -191,12 +191,12 @@ class Plotting(object):
             xerr, ellb, clb, errb = bincl(ell_center[i_bin], binval[i_bin], 
                                                 sigmas[:,i_bin], nbins=nbins)
             inds = np.where(ellb > 45)
-            self.ax.errorbar(ellb[inds]**power, clb[inds], xerr=xerr[inds],
-                    yerr=errb[inds], fmt=symbol,
+            self.ax.errorbar(ellb[inds]**power, clb[inds]**0.5, xerr=xerr[inds],
+                    yerr=0.5*errb[inds]/clb[inds]**0.5, fmt=symbol,
                     ms=ms,
                 color=color, alpha=alpha)
-            self.ax.errorbar(ellb[inds]**power, -clb[inds], xerr=xerr[inds],
-                    yerr=errb[inds], fmt=symbol, markerfacecolor='none', 
+            self.ax.errorbar(ellb[inds]**power, (-clb[inds])**0.5, xerr=xerr[inds],
+                    yerr=0.5*errb[inds]/(-clb[inds])**0.5, fmt=symbol, markerfacecolor='none', 
                     ms=ms, markeredgecolor=color, markeredgewidth=1,
                     ecolor=color, alpha=alpha)
             inds = np.where(ellb <= 45)
@@ -211,11 +211,11 @@ class Plotting(object):
                 xerr, ellb, clb, errb = bincl(ell_center[i_bin][inds],
                         binval[i_bin][inds], sigmas[:,i_bin][:,inds[0]],
                         nbins=nbins)
-                self.ax.errorbar(ellb**power, clb, xerr=xerr,
-                        yerr=errb, fmt=symbol,
+                self.ax.errorbar(ellb**power, clb**0.5, xerr=xerr,
+                        yerr=0.5*errb/clb**0.5, fmt=symbol,
                         ms=ms, color=color, alpha=alpha)
-                self.ax.errorbar(ellb**power, -clb, xerr=xerr,
-                        yerr=errb, fmt=symbol, markerfacecolor='none', 
+                self.ax.errorbar(ellb**power, (-clb)**0.5, xerr=xerr,
+                        yerr=0.5*errb/(-clb)**0.5, fmt=symbol, markerfacecolor='none', 
                         ms=ms, markeredgecolor=color, markeredgewidth=1,
                         ecolor=color, alpha=alpha)
             label=None
@@ -328,13 +328,13 @@ class Plotting(object):
             cl_theory[ignore] = np.nan
 
         if log:
-            self.ax.loglog(ell[2:]**power, cl_theory[2:], color, linestyle=linestyle,
+            self.ax.loglog(ell[2:]**power, cl_theory[2:]**0.5, color, linestyle=linestyle,
                     lw=lw)
-            self.ax.loglog(ell[2:]**power, -cl_theory[2:], color, linestyle='-.', lw=lw)
+            self.ax.loglog(ell[2:]**power, (-cl_theory[2:])**0.5, color, linestyle='-.', lw=lw)
         else:
-            self.ax.plot(ell[2:]**power, cl_theory[2:], color, linestyle=linestyle,
+            self.ax.plot(ell[2:]**power, cl_theory[2:]**0.5, color, linestyle=linestyle,
                     lw=lw)
-            self.ax.plot(ell[2:]**power, -cl_theory[2:], color, linestyle='-.', lw=lw)
+            self.ax.plot(ell[2:]**power, (-cl_theory[2:])**0.5, color, linestyle='-.', lw=lw)
 
 
         if self.inset:
