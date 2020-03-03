@@ -5,6 +5,9 @@ import pandas
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset, inset_axes
 
+global offset
+offset = 0
+
 power = 0.2
 def bincl(ell, cl, clerr, nbins=10):
     clerr = np.mean(clerr, axis=0)
@@ -148,7 +151,6 @@ class Plotting(object):
         data = self.data[cltype]
 
         ell_center, ell_minus, ell_plus, binval, sigma_plus, sigma_minus, upper_bound = data.get_data(experiment)
-
         sigmas = np.array([sigma_plus, sigma_minus])
         
         if label is None:
@@ -191,12 +193,15 @@ class Plotting(object):
             xerr, ellb, clb, errb = bincl(ell_center[i_bin], binval[i_bin], 
                                                 sigmas[:,i_bin], nbins=nbins)
             inds = np.where(ellb > 45)
+
             self.ax.errorbar(ellb[inds]**power, clb[inds]**0.5, xerr=xerr[inds],
-                    yerr=0.5*errb[inds]/clb[inds]**0.5, fmt=symbol,
+                    yerr=0.5*errb[inds]/abs(clb[inds])**0.5, fmt=symbol,
+                    #yerr=errb[inds], fmt=symbol,
                     ms=ms,
                 color=color, alpha=alpha)
             self.ax.errorbar(ellb[inds]**power, (-clb[inds])**0.5, xerr=xerr[inds],
-                    yerr=0.5*errb[inds]/(-clb[inds])**0.5, fmt=symbol, markerfacecolor='none', 
+                    yerr=0.5*errb[inds]/abs(clb[inds])**0.5, fmt=symbol, markerfacecolor='none', 
+                    #yerr=errb[inds], fmt=symbol, markerfacecolor='none', 
                     ms=ms, markeredgecolor=color, markeredgewidth=1,
                     ecolor=color, alpha=alpha)
             inds = np.where(ellb <= 45)
@@ -211,11 +216,18 @@ class Plotting(object):
                 xerr, ellb, clb, errb = bincl(ell_center[i_bin][inds],
                         binval[i_bin][inds], sigmas[:,i_bin][:,inds[0]],
                         nbins=nbins)
-                self.ax.errorbar(ellb**power, clb**0.5, xerr=xerr,
-                        yerr=0.5*errb/clb**0.5, fmt=symbol,
+                if np.any(np.array([clb])) == 0:
+                    norm = 0.5*errb
+                    clb = 0.5*errb
+                else:
+                    norm = 0.5*errb/abs(clb)**0.5
+                    clb = clb
+                jitter = 1+np.random.random(len(ellb))*0.05
+                self.ax.errorbar(jitter*ellb**power, clb**0.5,
+                        yerr=norm, fmt=symbol,
                         ms=ms, color=color, alpha=alpha)
-                self.ax.errorbar(ellb**power, (-clb)**0.5, xerr=xerr,
-                        yerr=0.5*errb/(-clb)**0.5, fmt=symbol, markerfacecolor='none', 
+                self.ax.errorbar(jitter*ellb**power, (-clb)**0.5,
+                        yerr=norm, fmt=symbol, markerfacecolor='none',
                         ms=ms, markeredgecolor=color, markeredgewidth=1,
                         ecolor=color, alpha=alpha)
             label=None
@@ -256,14 +268,14 @@ class Plotting(object):
                             label=label, ms=ms, alpha=alpha)
             '''
 
-
         if np.any(i_ub):
-            self.ax.errorbar(ell_center[i_ub], upper_bound[i_ub], xerr=xerr[:, i_ub], yerr=sigmas[:, i_ub], color=color, fmt='o', label=label,
+            self.ax.errorbar(ell_center[i_ub], upper_bound[i_ub]**0.5, xerr=xerr[:, i_ub], yerr=sigmas[:, i_ub]/abs(upper_bound[i_ub])**0.5, color=color, fmt='o', label=label,
                              uplims=True, ms=ms)
-            self.ax.errorbar(ell_center[i_ub], -upper_bound[i_ub], xerr=xerr[:,
-                i_ub], yerr=sigmas[:, i_ub], fmt='o', label=label,
+            self.ax.errorbar(ell_center[i_ub], (-upper_bound[i_ub])**0.5, xerr=xerr[:,
+                i_ub], yerr=sigmas[:, i_ub]/abs(upper_bound[i_ub])**0.5, fmt='o', label=label,
                 markerfacecolor='none', markeredgecolor=color, uplims=True,
                 ms=ms)
+            print(ell_center[i_ub], upper_bound[i_ub], sigmas[:,i_ub])
 
 
         
